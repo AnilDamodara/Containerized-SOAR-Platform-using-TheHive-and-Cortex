@@ -1,7 +1,7 @@
 # PROJECT COMPLETION SUMMARY
-## Automated SOC Incident Response Platform
+## Containerized-SOAR-Platform-using-TheHive-and-Cortex
 
-**Project**: Automated SOC Incident Response using TheHive and Cortex  
+**Project**: Containerized-SOAR-Platform-using-TheHive-and-Cortex
 **Status**: ✅ Complete & Production Ready  
 **Version**: 1.0.0  
 **Date**: January 2024
