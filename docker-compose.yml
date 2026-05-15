@@ -1,0 +1,251 @@
+services:
+  # TheHive Application
+  thehive:
+    image: thehiveproject/thehive4:latest
+    container_name: thehive
+    depends_on:
+      - cassandra
+      - elasticsearch
+      - minio
+    ports:
+      - "9010:9000"
+    environment:
+      - JVM_OPTS=-Xms1g -Xmx1g
+      - TH_SECRET=ChangeThisToASecureRandomString
+      - CASSANDRA_HOSTNAME=cassandra
+      - ELASTICSEARCH_HOSTNAME=elasticsearch
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    volumes:
+      - thehive-data:/opt/thehive/data
+    networks:
+      - soc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9010"]
+      interval: 60s  # Increased for slower startups
+      timeout: 30s
+      retries: 10
+
+  # Cassandra Database
+  cassandra:
+    image: cassandra:3.11
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=TheHive
+      - CASSANDRA_DC=dc1
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    networks:
+      - soc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    container_name: elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - soc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+
+  # MinIO (S3 storage)
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9001:9000"
+    environment:
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    volumes:
+      - minio-data:/data
+    networks:
+      - soc-network
+    command: minio server /data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+
+  # Cortex - Threat Intelligence Engine
+  cortex:
+    image: thehiveproject/cortex:latest
+    container_name: cortex
+    ports:
+      - "9002:9001"
+    depends_on:
+      - cortex-db
+    environment:
+      - JVM_OPTS=-Xms1g -Xmx1g
+      - DB_HOSTNAME=cortex-db
+      - DB_PORT=5432
+      - DB_NAME=cortex
+      - DB_USER=cortex
+      - DB_PASSWORD=CortexPassword123!
+    volumes:
+      - cortex-data:/opt/cortex/data
+    networks:
+      - soc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9001"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+
+  # PostgreSQL for Cortex
+  cortex-db:
+    image: postgres:13
+    container_name: cortex-db
+    environment:
+      - POSTGRES_DB=cortex
+      - POSTGRES_USER=cortex
+      - POSTGRES_PASSWORD=CortexPassword123!
+    volumes:
+      - cortex-db-data:/var/lib/postgresql/data
+    networks:
+      - soc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cortex"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  # Wazuh Indexer
+  wazuh-indexer:
+    image: wazuh/wazuh-indexer:4.7.0
+    container_name: wazuh-indexer
+    ports:
+      - "9201:9200"
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - wazuh-indexer-config:/usr/share/wazuh-indexer/config
+    networks:
+      - soc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f https://localhost:9200/_cluster/health || exit 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+
+  # Wazuh Agent Manager
+  wazuh:
+    image: wazuh/wazuh-manager:4.7.0
+    container_name: wazuh
+    ports:
+      - "1514:1514"
+      - "1515:1515"
+      - "514:514/udp"
+      - "55000:55000"
+    depends_on:
+      - wazuh-indexer
+    environment:
+      - INDEXER_URL=https://wazuh-indexer:9200
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=SecurePassword123!
+      - FILEBEAT_SSL_VERIFICATION_MODE=full
+      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/certs/ca.pem
+      - SSL_CERTIFICATE=/etc/ssl/certs/cert.pem
+      - SSL_KEY=/etc/ssl/certs/key.pem
+    volumes:
+      - wazuh-data:/var/ossec/data
+      - wazuh-config:/var/ossec/etc
+    networks:
+      - soc-network
+    restart: unless-stopped
+
+  # Web Dashboard
+  soc-dashboard:
+    build:
+      context: ..
+      dockerfile: dashboards/Dockerfile
+    container_name: soc-dashboard
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - THEHIVE_URL=http://thehive:9000
+      - CORTEX_URL=http://cortex:9001
+      - WAZUH_URL=http://wazuh:55000
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+    depends_on:
+      thehive:
+        condition: service_healthy
+      cortex:
+        condition: service_healthy
+    volumes:
+      - ../dashboard:/app
+    networks:
+      - soc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+
+  # Alert Collector Service (uncomment if needed)
+  #alert-collector:
+    #build:
+      #context: ../services
+      #dockerfile: Dockerfile.collector
+    #container_name: alert-collector
+    #environment:
+      #- THEHIVE_URL=http://thehive:9000
+      #- THEHIVE_API_KEY=${THEHIVE_API_KEY}
+      #- SPLUNK_URL=${SPLUNK_URL}
+      #- SPLUNK_USERNAME=${SPLUNK_USERNAME}
+      #- SPLUNK_PASSWORD=${SPLUNK_PASSWORD}
+      #- WAZUH_URL=http://wazuh:55000
+      #- VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+    #depends_on:
+      #- thehive
+      #- cortex
+    #volumes:
+      #- ../scripts:/app/scripts
+      #- ../config:/app/config
+    #networks:
+      #- soc-network
+    #restart: unless-stopped
+
+volumes:
+  thehive-data:
+  cassandra-data:
+  elasticsearch-data:
+  minio-data:
+  cortex-data:
+  cortex-db-data:
+  wazuh-data:
+  wazuh-config:
+  wazuh-indexer-data:
+  wazuh-indexer-config:
+
+networks:
+  soc-network:
+    driver: bridge
