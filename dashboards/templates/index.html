@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOC Dashboard - Automated Incident Response</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i>
+                <span>SOC Dashboard</span>
+            </div>
+            
+            <ul class="menu">
+                <li><a href="#" onclick="showSection('overview')" class="menu-item active">
+                    <i class="fas fa-chart-line"></i> Overview
+                </a></li>
+                <li><a href="#" onclick="showSection('cases')" class="menu-item">
+                    <i class="fas fa-folder"></i> Cases
+                </a></li>
+                <li><a href="#" onclick="showSection('alerts')" class="menu-item">
+                    <i class="fas fa-bell"></i> Alerts
+                </a></li>
+                <li><a href="#" onclick="showSection('enrichment')" class="menu-item">
+                    <i class="fas fa-brain"></i> Threat Intelligence
+                </a></li>
+                <li><a href="#" onclick="showSection('response')" class="menu-item">
+                    <i class="fas fa-robot"></i> Automated Response
+                </a></li>
+                <li><a href="#" onclick="showSection('reporting')" class="menu-item">
+                    <i class="fas fa-file-alt"></i> Reports
+                </a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="search-box">
+                    <input type="text" placeholder="Search cases, alerts, observables...">
+                    <button><i class="fas fa-search"></i></button>
+                </div>
+                <div class="user-menu">
+                    <div class="notifications">
+                        <i class="fas fa-bell"></i>
+                        <span class="badge" id="notification-badge">3</span>
+                    </div>
+                    <div class="user-profile">
+                        <img src="https://via.placeholder.com/40" alt="User">
+                        <div class="user-info">
+                            <p class="user-name">Admin</p>
+                            <p class="user-status">Online</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Sections -->
+            <div class="content">
+                <!-- Overview Section -->
+                <section id="overview" class="section active">
+                    <div class="section-header">
+                        <h1>Dashboard Overview</h1>
+                        <p class="timestamp">Last updated: <span id="update-time">--:--:--</span></p>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card critical">
+                            <div class="kpi-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                            <div class="kpi-content">
+                                <h3>Open Cases</h3>
+                                <p class="kpi-value" id="open-cases">--</p>
+                                <p class="kpi-change">↑ <span id="new-cases">--</span> new</p>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card warning">
+                            <div class="kpi-icon"><i class="fas fa-alert"></i></div>
+                            <div class="kpi-content">
+                                <h3>Active Alerts</h3>
+                                <p class="kpi-value" id="active-alerts">--</p>
+                                <p class="kpi-change">↑ <span id="new-alerts">--</span> new</p>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card success">
+                            <div class="kpi-icon"><i class="fas fa-check-circle"></i></div>
+                            <div class="kpi-content">
+                                <h3>Resolved Cases</h3>
+                                <p class="kpi-value" id="resolved-cases">--</p>
+                                <p class="kpi-change">MTTR: <span id="mttr">--</span> hrs</p>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card info">
+                            <div class="kpi-icon"><i class="fas fa-network-wired"></i></div>
+                            <div class="kpi-content">
+                                <h3>Threat Score</h3>
+                                <p class="kpi-value" id="threat-score">--</p>
+                                <p class="kpi-change">System Status: Good</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Severity Distribution</h3>
+                            <canvas id="severity-chart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Case Status Breakdown</h3>
+                            <canvas id="status-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="recent-activity">
+                        <h3>Recent Activity</h3>
+                        <div class="activity-list" id="activity-list">
+                            <div class="loading">Loading activities...</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Cases Section -->
+                <section id="cases" class="section">
+                    <div class="section-header">
+                        <h1>Incident Cases</h1>
+                        <button class="btn btn-primary"><i class="fas fa-plus"></i> New Case</button>
+                    </div>
+
+                    <div class="filters">
+                        <select id="status-filter" onchange="filterCases()">
+                            <option value="">All Status</option>
+                            <option value="New">New</option>
+                            <option value="InProgress">In Progress</option>
+                            <option value="Resolved">Resolved</option>
+                        </select>
+                        <select id="severity-filter" onchange="filterCases()">
+                            <option value="">All Severity</option>
+                            <option value="1">Low</option>
+                            <option value="2">Medium</option>
+                            <option value="3">High</option>
+                            <option value="4">Critical</option>
+                        </select>
+                    </div>
+
+                    <div class="cases-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Severity</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cases-tbody">
+                                <tr><td colspan="6" class="text-center">Loading cases...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Alerts Section -->
+                <section id="alerts" class="section">
+                    <div class="section-header">
+                        <h1>Security Alerts</h1>
+                        <div class="action-buttons">
+                            <button class="btn btn-secondary">Refresh</button>
+                            <button class="btn btn-danger">Dismiss All</button>
+                        </div>
+                    </div>
+
+                    <div class="alerts-container" id="alerts-container">
+                        <div class="loading">Loading alerts...</div>
+                    </div>
+                </section>
+
+                <!-- Threat Intelligence Section -->
+                <section id="enrichment" class="section">
+                    <div class="section-header">
+                        <h1>Threat Intelligence & Enrichment</h1>
+                    </div>
+
+                    <div class="enrichment-grid">
+                        <div class="enrichment-card">
+                            <h3>IP Reputation</h3>
+                            <div class="stat">
+                                <span class="label">Analyzed IPs:</span>
+                                <span class="value" id="ips-analyzed">0</span>
+                            </div>
+                        </div>
+                        <div class="enrichment-card">
+                            <h3>File Hash Analysis</h3>
+                            <div class="stat">
+                                <span class="label">Analyzed Files:</span>
+                                <span class="value" id="files-analyzed">0</span>
+                            </div>
+                        </div>
+                        <div class="enrichment-card">
+                            <h3>URL Analysis</h3>
+                            <div class="stat">
+                                <span class="label">Analyzed URLs:</span>
+                                <span class="value" id="urls-analyzed">0</span>
+                            </div>
+                        </div>
+                        <div class="enrichment-card">
+                            <h3>Active Jobs</h3>
+                            <div class="stat">
+                                <span class="label">Running Analyzers:</span>
+                                <span class="value" id="active-jobs">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="enrichment-jobs">
+                        <h3>Recent Enrichment Jobs</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Job ID</th>
+                                    <th>Analyzer</th>
+                                    <th>Observable</th>
+                                    <th>Status</th>
+                                    <th>Result</th>
+                                </tr>
+                            </thead>
+                            <tbody id="jobs-tbody">
+                                <tr><td colspan="5" class="text-center">Loading jobs...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Automated Response Section -->
+                <section id="response" class="section">
+                    <div class="section-header">
+                        <h1>Automated Response Actions</h1>
+                    </div>
+
+                    <div class="response-actions">
+                        <div class="action-card">
+                            <h3>Response Policies</h3>
+                            <div class="policy-list">
+                                <div class="policy-item">
+                                    <span>Malware Detected</span>
+                                    <span class="badge">Active</span>
+                                </div>
+                                <div class="policy-item">
+                                    <span>Brute Force Attempt</span>
+                                    <span class="badge">Active</span>
+                                </div>
+                                <div class="policy-item">
+                                    <span>Data Exfiltration</span>
+                                    <span class="badge">Active</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="action-card">
+                            <h3>Recent Actions Executed</h3>
+                            <div class="actions-log" id="actions-log">
+                                <div class="loading">Loading actions...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Reporting Section -->
+                <section id="reporting" class="section">
+                    <div class="section-header">
+                        <h1>Reports & Analytics</h1>
+                    </div>
+
+                    <div class="reports-grid">
+                        <div class="report-card">
+                            <h3>Generate Report</h3>
+                            <select>
+                                <option>Select Report Type</option>
+                                <option>Incident Summary</option>
+                                <option>Monthly Analytics</option>
+                                <option>Threat Assessment</option>
+                                <option>Compliance Report</option>
+                            </select>
+                            <button class="btn btn-primary">Generate</button>
+                        </div>
+
+                        <div class="report-card">
+                            <h3>Export Data</h3>
+                            <div class="export-options">
+                                <button class="btn">Export as PDF</button>
+                                <button class="btn">Export as CSV</button>
+                                <button class="btn">Export as JSON</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
